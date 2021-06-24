@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=utf-8>
+    <title>szg0105</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { width: 100%; height: 100% }
+        #info { position: absolute; top: 10px; left: 10px; width: 50%; text-align: left; z-index: 100; display: block; color: white; font-family: 'Century Gothic'; font-weight: bold; opacity: 1.0; }
+    </style>
+    <script src="js/stats.min.js"></script>
+    <script src="js/dat.gui.min.js"></script>
+</head>
+
+<body>
+<div id="info" onkeydown="infopanelEvent(event)">
+    <p id="infopanel">
+        Varga Klaudia<br/>
+        Neptun: QBB82W<br/>
+        Programtervező informatikus<br/>
+        2020/21/I
+    </p>
+</div>
+<script type="module">
+    // Modulok importálása
+    import * as THREE from "./js-r119/build/three.module.js";
+    import { TrackballControls } from './js-r119/examples/jsm/controls/TrackballControls.js';
+    import { OBJLoader } from "./js-r119/examples/jsm/loaders/OBJLoader.js";
+    import { GUI } from './js-r119/examples/jsm/libs/dat.gui.module.js';
+    import Stats from './js-r119/examples/jsm/libs/stats.module.js';
+
+    // Globális változók
+    var WIDTH, HEIGHT, aspectRatio;
+    var renderer;
+    var scene, camera;
+    var controls;
+
+    // Textúrák
+    var TextureLoader;
+    var grassTexture, grassMaterial;
+    var stoneTexture, stoneMaterial;
+    var woodTexture, woodMaterial;
+    var roofTexture, roofMaterial;
+
+    // Blender modellek
+    var donkeyLoaded, troneLoaded, witchLoaded01, witchLoaded02, witchLoaded03;
+    var donkeyLoadedGroup, witchGroup01, witchGroup02, witchGroup03;
+
+    // Talaj
+    var groundMesh, roadMesh01, roadMesh02;
+
+    // Tornyok
+    var towerMesh01, towerMesh02, towerMesh03, towerMesh04, towerMesh05, towerMesh06, towerMesh07;
+    var towerRoofMesh01, towerRoofMesh02, towerRoofMesh03, towerRoofMesh04, towerRoofMesh05, towerRoofMesh06, towerRoofMesh07;
+
+    // Kapuk
+    var gatehouseMesh01, gatehouseMesh02, gatehouseMesh03, gatehouseMesh04, gatehouseMesh05;
+    var gatehouseMesh06, gatehouseMesh07, gatehouseMesh08, gatehouseMesh09, gatehouseMesh10;
+
+    // Falak
+    var wallMesh01, wallMesh02, wallMesh03, wallMesh04, wallMesh05, wallMesh06, wallMesh07, wallMesh08, wallMesh09;
+
+    // Vár
+    var castleBaseMesh;
+    var castleWallMesh01, castleWallMesh02, castleWallMesh03, castleWallMesh04;
+    var castleTowerMesh01, castleTowerMesh02, castleTowerMesh03, castleTowerMesh04;
+    var castleRoofMesh01, castleRoofMesh02, castleRoofMesh03, castleRoofMesh04;
+
+    // Lépcső
+    var stairGroup01, stairGroup02;
+    var stairsMesh01, stairsMesh02, stairsMesh03, stairsMesh04, stairsMesh05;
+    var stairsMesh06, stairsMesh07, stairsMesh08, stairsMesh09, stairsMesh10;
+    var stairsMesh11, stairsMesh12, stairsMesh13, stairsMesh14, stairsMesh15;
+    var stairsMesh16, stairsMesh17, stairsMesh18, stairsMesh19, stairsMesh20;
+
+    // Szekér
+    var wainGroup;
+    var wainMesh01, wainMesh02, wainMesh03, wainMesh04, wainMesh05;
+    var wainMesh06, wainMesh07, wainMesh08, wainMesh09, wainMesh10;
+    var wainMesh11, wainMesh12, wainMesh13, wainMesh14, wainMesh15;
+    var wainMesh16, wainMesh17, wainMesh18, wainMesh19, wainMesh20;
+
+    var wheelGroup;
+    var wheelMesh01, wheelMesh02, wheelMesh03, wheelMesh04;
+
+    // Akasztófa
+    var gallowsGroup;
+    var gallowsMesh01, gallowsMesh02, gallowsMesh03, gallowsMesh04, gallowsMesh05;
+    var gallowsMesh06, gallowsMesh07, gallowsMesh08, gallowsMesh09, gallowsMesh10;
+    var gallowsMesh11, gallowsMesh12, gallowsMesh13, gallowsMesh14, gallowsMesh15;
+    var gallowsMesh16, gallowsMesh17, gallowsMesh18, gallowsMesh19, gallowsMesh20;
+    var gallowsMesh21, gallowsMesh22, gallowsMesh23, gallowsMesh24, gallowsMesh25;
+
+    // Fények
+    var ambient, spot01;
+    var point01, point02, point03, point04, point05, point06;
+    var pointHelper01, pointHelper02, pointHelper03, pointHelper04, pointHelper05;
+
+    // Interakció
+    var ctrl;
+
+    var meshController = function () {
+        this.rotationGates = 0.0;
+        this.lights = false;
+        this.rotationDonkey = 0.0;
+        this.positionDonkeyX = 0.0;
+        this.positionDonkeyZ = 0.0;
+    };
+
+
+    function addControlGui( controlObject ) {
+        var gui = new GUI( { autoPlace: false } );
+        gui.add( controlObject, 'rotationGates', 0, 90 ).name( 'Kapunyitás' );
+        gui.add( controlObject, 'lights' ).name( 'Nappal/éjszaka' );
+        gui.add( controlObject, 'rotationDonkey', -180.0, 180.0 ).name( 'Csacsi forgatás' );
+        gui.add( controlObject, 'positionDonkeyX', -100.0, 100.0).name( 'Előre/hátra' );
+        gui.add( controlObject, 'positionDonkeyZ', -100.0, 100.0).name( 'Jobbra/balra' );
+
+        gui.domElement.style.position = 'absolute';
+        gui.domElement.style.top = '0px';
+        gui.domElement.style.right = '0px';
+        document.body.appendChild( gui.domElement );
+    }
+
+    // Blender
+
+    function witchLoader03() {
+        var loader = new OBJLoader();
+        loader.load(
+            "blender/witch.obj",
+            function ( loaded ) {
+                witchLoaded03 = loaded;
+                witchLoaded03.traverse( function ( child ) {
+                    if ( child instanceof THREE.Mesh ) {
+                        child.material = new THREE.MeshLambertMaterial( { color: 0x000099, side: THREE.DoubleSide } );
+                    }
+                });
+                init();
+                animate();
+            },
+            function ( xhr ) {
+                console.log( ( xhr.loaded / xhr.total * 100 ) + "% loaded" );
+            },
+            function ( error ) {
+                console.log( "An error happened!", error.currentTarget.statusText, error.currentTarget.responseURL );
+            }
+        );
+    }
+    function witchLoader02() {
+        var loader = new OBJLoader();
+        loader.load(
+            "blender/witch.obj",
+            function ( loaded ) {
+                witchLoaded02 = loaded;
+                witchLoaded02.traverse( function ( child ) {
+                    if ( child instanceof THREE.Mesh ) {
+                        child.material = new THREE.MeshLambertMaterial( { color: 0x006600, side: THREE.DoubleSide } );
+                    }
+                });
+                witchLoader03();
+            },
+            function ( xhr ) {
+                console.log( ( xhr.loaded / xhr.total * 100 ) + "% loaded" );
+            },
+            function ( error ) {
+                console.log( "An error happened!", error.currentTarget.statusText, error.currentTarget.responseURL );
+            }
+        );
+    }
+    function witchLoader01() {
+        var loader = new OBJLoader();
+        loader.load(
+            "blender/witch.obj",
+            function ( loaded ) {
+                witchLoaded01 = loaded;
+                witchLoaded01.traverse( function ( child ) {
+                    if ( child instanceof THREE.Mesh ) {
+                        child.material = new THREE.MeshLambertMaterial( { color: 0x660000, side: THREE.DoubleSide } );
+                    }
+                });
+                witchLoader02();
+            },
+            function ( xhr ) {
+                console.log( ( xhr.loaded / xhr.total * 100 ) + "% loaded" );
+            },
+            function ( error ) {
+                console.log( "An error happened!", error.currentTarget.statusText, error.currentTarget.responseURL );
+            }
+        );
+    }
+    function troneLoader() {
+        var loader = new OBJLoader();
+        loader.load(
+            "blender/trone.obj",
+            function ( loaded ) {
+                troneLoaded = loaded;
+                troneLoaded.traverse( function ( child ) {
+                    if ( child instanceof THREE.Mesh ) {
+                        child.material = new THREE.MeshLambertMaterial( { color: 0xbb6030, side: THREE.DoubleSide } );
+                    }
+                });
+                witchLoader01();
+            },
+            function ( xhr ) {
+                console.log( ( xhr.loaded / xhr.total * 100 ) + "% loaded" );
+            },
+            function ( error ) {
+                console.log( "An error happened!", error.currentTarget.statusText, error.currentTarget.responseURL );
+            }
+        );
+    }
+    function loader() {
+        var loader = new OBJLoader();
+        loader.load(
+            "blender/donkey.obj",
+            function ( loaded ) {
+                donkeyLoaded = loaded;
+                donkeyLoaded.traverse( function ( child ) {
+                    if ( child instanceof THREE.Mesh ) {
+                        child.material = new THREE.MeshLambertMaterial( { color: 0xb9aba4, side: THREE.DoubleSide } );
+                    }
+                });
+                troneLoader();
+            },
+            function ( xhr ) {
+                console.log( ( xhr.loaded / xhr.total * 100 ) + "% loaded" );
+            },
+            function ( error ) {
+                console.log( "An error happened!", error.currentTarget.statusText, error.currentTarget.responseURL );
+            }
+        );
+    }
+
+    loader();
+
+    function init() {
+        // Böngésző ablakméret lekérése és méretarány számítása
+        HEIGHT = window.innerHeight;
+        WIDTH = window.innerWidth;
+        aspectRatio = WIDTH / HEIGHT;
+
+        // Renderer létrehozása és DOM-hoz adása
+        renderer = new THREE.WebGLRenderer( { antialias: true } );
+        renderer.setSize( WIDTH, HEIGHT );
+        renderer.setClearColor( 0x000000 );
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild( renderer.domElement );
+
+        // Színtér létrehozása
+        scene = new THREE.Scene();
+
+        // Kamera létrehozása és vetítési paramétereinek beállítása
+        camera = new THREE.PerspectiveCamera( 75, aspectRatio, 0.1, 1000 );
+        camera.position.z = 15;
+        camera.lookAt( scene.position );
+
+        controls = new TrackballControls( camera, renderer.domElement );
+        controls.rotateSpeed = 5.0;
+        controls.panSpeed = 1.0;
+
+
+        ctrl = new meshController();
+        addControlGui( ctrl );
+
+        // Textúrák hozzáadása
+        TextureLoader = new THREE.TextureLoader();
+        grassTexture = TextureLoader.load("img/grass.jpg");
+        grassMaterial = new THREE.MeshPhongMaterial({ color: 0x334d25, side: THREE.DoubleSide });
+        grassMaterial.map = grassTexture;
+
+        stoneTexture = TextureLoader.load("img/stone.jpg");
+        stoneMaterial = new THREE.MeshPhongMaterial({ color: 0xebe0d0 });
+        stoneMaterial.map = stoneTexture;
+
+        woodTexture = TextureLoader.load("img/wood.jpg");
+        woodMaterial = new THREE.MeshPhongMaterial({ color: 0x694b2f, side: THREE.DoubleSide });
+        woodMaterial.map = woodTexture;
+
+        roofTexture = TextureLoader.load("img/roof.png");
+        roofMaterial = new THREE.MeshPhongMaterial({ color: 0x998050, side: THREE.DoubleSide });
+        roofMaterial.map = roofTexture;
+
+        // Blender modell
+
+        donkeyLoadedGroup = new THREE.Object3D();
+        donkeyLoadedGroup.position.set(75, -3, 85);
+
+        donkeyLoaded.scale.set(10, 10, 10);
+        donkeyLoaded.rotation.set(0, THREE.MathUtils.degToRad( -110 ), 0);
+        donkeyLoaded.position.set(0, 0, 0);
+        donkeyLoaded.receiveShadow = true;
+        donkeyLoaded.castShadow = true;
+
+        donkeyLoadedGroup.add( donkeyLoaded );
+        scene.add( donkeyLoadedGroup );
+
+        troneLoaded.scale.set(15, 15, 15);
+        troneLoaded.rotation.set(0, THREE.MathUtils.degToRad( 90 ), 0);
+        troneLoaded.position.set(-230, 10, -105);
+        troneLoaded.receiveShadow = true;
+        troneLoaded.castShadow = true;
+        scene.add( troneLoaded );
+
+        witchGroup01 = new THREE.Object3D();
+        witchGroup01.position.set(-230, 220, -80);
+
+        witchLoaded01.scale.set(20, 20, 20);
+        witchLoaded01.position.set(-130, 0, 0);
+        witchLoaded01.castShadow = true;
+
+        point04 = new THREE.PointLight( 0xff0000, 1 );
+        point04.position.set( -130, 0, 0 );
+
+        witchGroup01.add( witchLoaded01 );
+        witchGroup01.add( point04 );
+        scene.add( witchGroup01 );
+
+        witchGroup02 = new THREE.Object3D();
+        witchGroup02.position.set(-100, 280, -180);
+
+        witchLoaded02.scale.set(20, 20, 20);
+        witchLoaded02.position.set(120, 0, 0);
+        witchLoaded02.castShadow = true;
+
+        point05 = new THREE.PointLight( 0x00ff00, 1 );
+        point05.position.set(120, 0, 0 );
+
+        witchGroup02.add( witchLoaded02 );
+        witchGroup02.add( point05 );
+        scene.add( witchGroup02 );
+
+        witchGroup03 = new THREE.Object3D();
+        witchGroup03.position.set(-100, 200, -10);
+
+        witchLoaded03.scale.set(20, 20, 20);
+        witchLoaded03.position.set(90, 0, 0);
+        witchLoaded03.castShadow = true;
+
+        point06 = new THREE.PointLight( 0x0000ff, 1 );
+        point06.position.set(90, 0, 0 );
+
+        witchGroup03.add( witchLoaded03 );
+        witchGroup03.add( point06 );
+        scene.add( witchGroup03 );
+
+        // Talaj létrehozása
+        groundMesh = new THREE.Mesh( new THREE.PlaneGeometry( 800, 650 ), grassMaterial );
+        groundMesh.receiveShadow = true;
+        groundMesh.rotation.x = -1.0 * THREE.MathUtils.degToRad( 90 );
+        groundMesh.position.y = -20;
+        scene.add( groundMesh );
+
+        // Bástya (1) létrehozása
+        towerMesh01 = new THREE.Mesh( new THREE.CylinderGeometry(30, 30, 120, 40), stoneMaterial );
+        towerMesh01.receiveShadow = true;
+        towerMesh01.castShadow = true;
+        towerMesh01.position.set(-365, 40.01, 100);
+        scene.add( towerMesh01 );
+
+        towerRoofMesh01 = new THREE.Mesh( new THREE.CylinderGeometry(0, 30, 55, 40), roofMaterial );
+        towerRoofMesh01.receiveShadow = true;
+        towerRoofMesh01.castShadow = true;
+        towerRoofMesh01.position.set(-365, 127.61, 100);
+        scene.add( towerRoofMesh01 );
+
+        // Bástya (2) létrehozása
+        towerMesh02 = new THREE.Mesh( new THREE.CylinderGeometry(30, 30, 120, 40), stoneMaterial );
+        towerMesh02.receiveShadow = true;
+        towerMesh02.castShadow = true;
+        towerMesh02.position.set(-185, 40.01, 210);
+        scene.add( towerMesh02 );
+
+        towerRoofMesh02 = new THREE.Mesh( new THREE.CylinderGeometry(0, 30, 55, 40), roofMaterial );
+        towerRoofMesh02.receiveShadow = true;
+        towerRoofMesh02.castShadow = true;
+        towerRoofMesh02.position.set(-185, 127.61, 210);
+        scene.add( towerRoofMesh02 );
+
+        // Bástya (3) létrehozása
+        towerMesh03 = new THREE.Mesh( new THREE.CylinderGeometry(30, 30, 120, 40), stoneMaterial );
+        towerMesh03.receiveShadow = true;
+        towerMesh03.castShadow = true;
+        towerMesh03.position.set(120, 40.01, 210);
+        scene.add( towerMesh03 );
+
+        towerRoofMesh03 = new THREE.Mesh( new THREE.CylinderGeometry(0, 30, 55, 40), roofMaterial );
+        towerRoofMesh03.receiveShadow = true;
+        towerRoofMesh03.castShadow = true;
+        towerRoofMesh03.position.set(120, 127.61, 210);
+        scene.add( towerRoofMesh03 );
+
+        // Bástya (4) létrehozása
+        towerMesh04 = new THREE.Mesh( new THREE.CylinderGeometry(30, 30, 120, 40), stoneMaterial );
+        towerMesh04.receiveShadow = true;
+        towerMesh04.castShadow = true;
+        towerMesh04.position.set(280, 40.01, 125);
+        scene.add( towerMesh04 );
+
+        towerRoofMesh04 = new THREE.Mesh( new THREE.CylinderGeometry(0, 30, 55, 40), roofMaterial );
+        towerRoofMesh04.receiveShadow = true;
+        towerRoofMesh04.castShadow = true;
+        towerRoofMesh04.position.set(280, 127.61, 125);
+        scene.add( towerRoofMesh04 );
+
+        // Bástya (5) létrehozása
+        towerMesh05 = new THREE.Mesh( new THREE.CylinderGeometry(30, 30, 120, 40), stoneMaterial );
+        towerMesh05.receiveShadow = true;
+        towerMesh05.castShadow = true;
+        towerMesh05.position.set(280, 40.01, -80);
+        scene.add( towerMesh05 );
+
+        towerRoofMesh05 = new THREE.Mesh( new THREE.CylinderGeometry(0, 30, 55, 40), roofMaterial );
+        towerRoofMesh05.receiveShadow = true;
+        towerRoofMesh05.castShadow = true;
+        towerRoofMesh05.position.set(280, 127.61, -80);
+        scene.add( towerRoofMesh05 );
+
+        // Bástya (6) létrehozása
+        towerMesh06 = new THREE.Mesh( new THREE.CylinderGeometry(30, 30, 120, 40), stoneMaterial );
+        towerMesh06.receiveShadow = true;
+        towerMesh06.castShadow = true;
+        towerMesh06.position.set(160, 40.01, -280);
+        scene.add( towerMesh06 );
+
+        towerRoofMesh06 = new THREE.Mesh( new THREE.CylinderGeometry(0, 30, 55, 40), roofMaterial );
+        towerRoofMesh06.receiveShadow = true;
+        towerRoofMesh06.castShadow = true;
+        towerRoofMesh06.position.set(160, 127.61, -280);
+        scene.add( towerRoofMesh06 );
+
+        // Bástya (7) létrehozása
+        towerMesh07 = new THREE.Mesh( new THREE.CylinderGeometry(30, 30, 120, 40), stoneMaterial );
+        towerMesh07.receiveShadow = true;
+        towerMesh07.castShadow = true;
+        towerMesh07.position.set(-365, 40.01, -280);
+        scene.add( towerMesh07 );
+
+        towerRoofMesh07 = new THREE.Mesh( new THREE.CylinderGeometry(0, 30, 55, 40), roofMaterial );
+        towerRoofMesh07.receiveShadow = true;
+        towerRoofMesh07.castShadow = true;
+        towerRoofMesh07.position.set(-365, 127.61, -280);
+        scene.add( towerRoofMesh07 );
+
+        // Kapu (1) létrehozása
+        gatehouseMesh01 = new THREE.Mesh( new THREE.BoxGeometry(100, 15, 100), stoneMaterial );
+        gatehouseMesh01.receiveShadow = true;
+        gatehouseMesh01.castShadow = true;
+        gatehouseMesh01.position.set(0, 70.01, 210);
+        scene.add( gatehouseMesh01 );
+
+        gatehouseMesh02 = new THREE.Mesh( new THREE.BoxGeometry(20, 83, 100), stoneMaterial );
+        gatehouseMesh02.receiveShadow = true;
+        gatehouseMesh02.castShadow = true;
+        gatehouseMesh02.position.set(-40, 21.51, 210);
+        scene.add( gatehouseMesh02 );
+
+        gatehouseMesh03 = new THREE.Mesh( new THREE.BoxGeometry(20, 83, 100), stoneMaterial );
+        gatehouseMesh03.receiveShadow = true;
+        gatehouseMesh03.castShadow = true;
+        gatehouseMesh03.position.set(40, 21.51, 210);
+        scene.add( gatehouseMesh03 );
+
+        // Kapu - mozgó rész (1)
+        gatehouseMesh04 = new THREE.Mesh( new THREE.PlaneGeometry(60, 83, 100), woodMaterial );
+        gatehouseMesh04.receiveShadow = true;
+        gatehouseMesh04.castShadow = true;
+        gatehouseMesh04.position.set(0, 21.51, 260);
+        scene.add( gatehouseMesh04 );
+
+        gatehouseMesh05 = new THREE.Mesh( new THREE.CylinderGeometry(0, 70, 50, 4), roofMaterial );
+        gatehouseMesh05.receiveShadow = true;
+        gatehouseMesh05.castShadow = true;
+        gatehouseMesh05.rotation.y = -1.0 * THREE.MathUtils.degToRad( 45 );
+        gatehouseMesh05.position.set(0, 103.01, 210);
+        scene.add( gatehouseMesh05 );
+
+
+        // Kapu (2) létrehozása
+        gatehouseMesh06 = new THREE.Mesh( new THREE.BoxGeometry(90, 15, 90), stoneMaterial );
+        gatehouseMesh06.receiveShadow = true;
+        gatehouseMesh06.castShadow = true;
+        gatehouseMesh06.position.set(290, 60.01, 20);
+        scene.add( gatehouseMesh06 );
+
+        gatehouseMesh07 = new THREE.Mesh( new THREE.BoxGeometry(20, 72.70, 90), stoneMaterial );
+        gatehouseMesh07.receiveShadow = true;
+        gatehouseMesh07.castShadow = true;
+        gatehouseMesh07.position.set(290, 16.36, 55);
+        gatehouseMesh07.rotation.y = -1.0 * THREE.MathUtils.degToRad( 90 );
+        scene.add( gatehouseMesh07 );
+
+        gatehouseMesh08 = new THREE.Mesh( new THREE.BoxGeometry(20, 72.70, 90), stoneMaterial );
+        gatehouseMesh08.receiveShadow = true;
+        gatehouseMesh08.castShadow = true;
+        gatehouseMesh08.position.set(290, 16.36, -15);
+        gatehouseMesh08.rotation.y = -1.0 * THREE.MathUtils.degToRad( 90 );
+        scene.add( gatehouseMesh08 );
+
+        gatehouseMesh09 = new THREE.Mesh( new THREE.PlaneGeometry(50, 72), woodMaterial );
+        gatehouseMesh09.receiveShadow = true;
+        gatehouseMesh09.castShadow = true;
+        gatehouseMesh09.position.set(335, 16.56, 20);
+        gatehouseMesh09.rotation.y = -1.0 * THREE.MathUtils.degToRad( 90 );
+        scene.add( gatehouseMesh09 );
+
+        gatehouseMesh10 = new THREE.Mesh( new THREE.CylinderGeometry(0, 63, 50, 4), roofMaterial );
+        gatehouseMesh10.receiveShadow = true;
+        gatehouseMesh10.castShadow = true;
+        gatehouseMesh10.position.set(290, 93, 20);
+        gatehouseMesh10.rotation.y = -1.0 * THREE.MathUtils.degToRad( 45 );
+        scene.add( gatehouseMesh10 );
+
+        // Fal (1) létrehozása
+        wallMesh01 = new THREE.Mesh( new THREE.BoxGeometry(470, 90, 20), stoneMaterial );
+        wallMesh01.receiveShadow = true;
+        wallMesh01.castShadow = true;
+        wallMesh01.position.set(-103, 25.01, -280);
+        scene.add( wallMesh01 );
+
+        // Fal (2) létrehozása
+        wallMesh02 = new THREE.Mesh( new THREE.BoxGeometry(330, 90, 20), stoneMaterial );
+        wallMesh02.receiveShadow = true;
+        wallMesh02.castShadow = true;
+        wallMesh02.rotation.y = -1.0 * THREE.MathUtils.degToRad( 90 );
+        wallMesh02.position.set(-365, 25.01, -85);
+        scene.add( wallMesh02 );
+
+        // Fal (3) létrehozása
+        wallMesh03 = new THREE.Mesh( new THREE.BoxGeometry(154, 90, 20), stoneMaterial );
+        wallMesh03.receiveShadow = true;
+        wallMesh03.castShadow = true;
+        wallMesh03.rotation.y = -1.0 * THREE.MathUtils.degToRad( 32 );
+        wallMesh03.position.set(-277, 25.01, 160);
+        scene.add( wallMesh03 );
+
+        // Fal (4) létrehozása
+        wallMesh04 = new THREE.Mesh( new THREE.BoxGeometry(112, 90, 20), stoneMaterial );
+        wallMesh04.receiveShadow = true;
+        wallMesh04.castShadow = true;
+        wallMesh04.position.set(-106, 25.01, 210);
+        scene.add( wallMesh04 );
+
+        // Fal (5) létrehozása
+        wallMesh05 = new THREE.Mesh( new THREE.BoxGeometry(45, 90, 20), stoneMaterial );
+        wallMesh05.receiveShadow = true;
+        wallMesh05.castShadow = true;
+        wallMesh05.position.set(73, 25.01, 210);
+        scene.add( wallMesh05 );
+
+        // Fal (6) létrehozása
+        wallMesh06 = new THREE.Mesh( new THREE.BoxGeometry(126, 90, 20), stoneMaterial );
+        wallMesh06.receiveShadow = true;
+        wallMesh06.castShadow = true;
+        wallMesh06.rotation.y = THREE.MathUtils.degToRad( 29 );
+        wallMesh06.position.set(201, 25.01, 170);
+        scene.add( wallMesh06 );
+
+        // Fal (7) létrehozása
+        wallMesh07 = new THREE.Mesh( new THREE.BoxGeometry(32, 90, 20), stoneMaterial );
+        wallMesh07.receiveShadow = true;
+        wallMesh07.castShadow = true;
+        wallMesh07.rotation.y = THREE.MathUtils.degToRad( 90 );
+        wallMesh07.position.set(280, 25.01, 81);
+        scene.add( wallMesh07 );
+
+        // Fal (8) létrehozása
+        wallMesh08 = new THREE.Mesh( new THREE.BoxGeometry(28, 90, 20), stoneMaterial );
+        wallMesh08.receiveShadow = true;
+        wallMesh08.castShadow = true;
+        wallMesh08.rotation.y = THREE.MathUtils.degToRad( 90 );
+        wallMesh08.position.set(280, 25.01, -38);
+        scene.add( wallMesh08 );
+
+        // Fal (9) létrehozása
+        wallMesh09 = new THREE.Mesh( new THREE.BoxGeometry(176, 90, 20), stoneMaterial );
+        wallMesh09.receiveShadow = true;
+        wallMesh09.castShadow = true;
+        wallMesh09.rotation.y = -1 * THREE.MathUtils.degToRad( 59 );
+        wallMesh09.position.set(220, 25.01, -180);
+        scene.add( wallMesh09 );
+
+        // Vár létrehozása
+
+        // Vár alap létrehozása
+        castleBaseMesh = new THREE.Mesh( new THREE.BoxGeometry(300, 30, 250), stoneMaterial );
+        castleBaseMesh.receiveShadow = true;
+        castleBaseMesh.castShadow = true;
+        castleBaseMesh.position.set(-185, -4.96, -135);
+        scene.add( castleBaseMesh );
+
+        // Várfal (1) létrehozása
+        castleWallMesh01 = new THREE.Mesh( new THREE.BoxGeometry(300, 130, 60), stoneMaterial );
+        castleWallMesh01.receiveShadow = true;
+        castleWallMesh01.castShadow = true;
+        castleWallMesh01.position.set(-185, 75.56, -230);
+        scene.add( castleWallMesh01 );
+
+        // Várfal (2) létrehozása
+        castleWallMesh02 = new THREE.Mesh( new THREE.BoxGeometry(300, 130, 60), stoneMaterial );
+        castleWallMesh02.receiveShadow = true;
+        castleWallMesh02.castShadow = true;
+        castleWallMesh02.position.set(-185, 75.56, -40);
+        scene.add( castleWallMesh02 );
+
+        // Várfal (3) létrehozása
+        castleWallMesh03 = new THREE.Mesh( new THREE.BoxGeometry(130, 130, 60), stoneMaterial );
+        castleWallMesh03.receiveShadow = true;
+        castleWallMesh03.castShadow = true;
+        castleWallMesh03.rotation.y = THREE.MathUtils.degToRad( 90 );
+        castleWallMesh03.position.set(-65, 75.56, -135);
+        scene.add( castleWallMesh03 );
+
+        // Várfal (4) létrehozása
+        castleWallMesh04 = new THREE.Mesh( new THREE.BoxGeometry(130, 130, 60), stoneMaterial );
+        castleWallMesh04.receiveShadow = true;
+        castleWallMesh04.castShadow = true;
+        castleWallMesh04.rotation.y = THREE.MathUtils.degToRad( 90 );
+        castleWallMesh04.position.set(-305, 75.56, -135);
+        scene.add( castleWallMesh04 );
+
+        // Vár-bástya (1) létrehozása
+        castleTowerMesh01 = new THREE.Mesh( new THREE.CylinderGeometry(35, 35, 300, 40), stoneMaterial );
+        castleTowerMesh01.receiveShadow = true;
+        castleTowerMesh01.castShadow = true;
+        castleTowerMesh01.position.set(-310, 130.01, -25);
+        scene.add( castleTowerMesh01 );
+
+        castleRoofMesh01 = new THREE.Mesh( new THREE.CylinderGeometry(0, 35, 75, 40), roofMaterial );
+        castleRoofMesh01.receiveShadow = true;
+        castleRoofMesh01.castShadow = true;
+        castleRoofMesh01.position.set(-310, 317.51, -25);
+        scene.add( castleRoofMesh01 );
+
+        // Vár-bástya (2) létrehozása
+        castleTowerMesh02 = new THREE.Mesh( new THREE.CylinderGeometry(35, 35, 300, 40), stoneMaterial );
+        castleTowerMesh02.receiveShadow = true;
+        castleTowerMesh02.castShadow = true;
+        castleTowerMesh02.position.set(-60, 130.01, -25);
+        scene.add( castleTowerMesh02 );
+
+        castleRoofMesh02 = new THREE.Mesh( new THREE.CylinderGeometry(0, 35, 75, 40), roofMaterial );
+        castleRoofMesh02.receiveShadow = true;
+        castleRoofMesh02.castShadow = true;
+        castleRoofMesh02.position.set(-60, 317.51, -25);
+        scene.add( castleRoofMesh02 );
+
+        // Vár-bástya (3) létrehozása
+        castleTowerMesh03 = new THREE.Mesh( new THREE.CylinderGeometry(35, 35, 300, 40), stoneMaterial );
+        castleTowerMesh03.receiveShadow = true;
+        castleTowerMesh03.castShadow = true;
+        castleTowerMesh03.position.set(-310, 130.01, -240);
+        scene.add( castleTowerMesh03 );
+
+        castleRoofMesh03 = new THREE.Mesh( new THREE.CylinderGeometry(0, 35, 75, 40), roofMaterial );
+        castleRoofMesh03.receiveShadow = true;
+        castleRoofMesh03.castShadow = true;
+        castleRoofMesh03.position.set(-310, 317.51, -240);
+        scene.add( castleRoofMesh03 );
+
+        // Vár-bástya (4) létrehozása
+        castleTowerMesh04 = new THREE.Mesh( new THREE.CylinderGeometry(35, 35, 300, 40), stoneMaterial );
+        castleTowerMesh04.receiveShadow = true;
+        castleTowerMesh04.castShadow = true;
+        castleTowerMesh04.position.set(-60, 130.01, -240);
+        scene.add( castleTowerMesh04 );
+
+        castleRoofMesh04 = new THREE.Mesh( new THREE.CylinderGeometry(0, 35, 75, 40), roofMaterial );
+        castleRoofMesh04.receiveShadow = true;
+        castleRoofMesh04.castShadow = true;
+        castleRoofMesh04.position.set(-60, 317.51, -240);
+        scene.add( castleRoofMesh04 );
+
+        // Lépcső (1) létrehozása:
+
+        stairGroup01 = new THREE.Object3D();
+        stairGroup01.position.set(-20, 0, -60);
+
+        // Lépcsőfok (1):
+        stairsMesh01 = new THREE.Mesh( new THREE.BoxGeometry(30, 10, 20), stoneMaterial );
+        stairsMesh01.receiveShadow = true;
+        stairsMesh01.castShadow = true;
+        stairsMesh01.position.set(0, -15, 0);
+        stairGroup01.add( stairsMesh01 );
+
+        // Lépcsőfok (2):
+        stairsMesh02 = new THREE.Mesh( new THREE.BoxGeometry(30, 20, 20), stoneMaterial );
+        stairsMesh02.receiveShadow = true;
+        stairsMesh02.castShadow = true;
+        stairsMesh02.position.set(0, -10, -20);
+        stairGroup01.add( stairsMesh02 );
+
+        // Lépcsőfok (3):
+        stairsMesh03 = new THREE.Mesh( new THREE.BoxGeometry(30, 30, 20), stoneMaterial );
+        stairsMesh03.receiveShadow = true;
+        stairsMesh03.castShadow = true;
+        stairsMesh03.position.set(0, -5, -40);
+        stairGroup01.add( stairsMesh03 );
+
+        // Lépcsőfok (4):
+        stairsMesh04 = new THREE.Mesh( new THREE.BoxGeometry(30, 40, 20), stoneMaterial );
+        stairsMesh04.receiveShadow = true;
+        stairsMesh04.castShadow = true;
+        stairsMesh04.position.set(0, 0, -60);
+        stairGroup01.add( stairsMesh04 );
+
+        // Lépcsőfok (5):
+        stairsMesh05 = new THREE.Mesh( new THREE.BoxGeometry(30, 50, 20), stoneMaterial );
+        stairsMesh05.receiveShadow = true;
+        stairsMesh05.castShadow = true;
+        stairsMesh05.position.set(0, 5, -80);
+        stairGroup01.add( stairsMesh05 );
+
+        // Lépcsőfok (6):
+        stairsMesh06 = new THREE.Mesh( new THREE.BoxGeometry(30, 60, 20), stoneMaterial );
+        stairsMesh06.receiveShadow = true;
+        stairsMesh06.castShadow = true;
+        stairsMesh06.position.set(0, 10, -100);
+        stairGroup01.add( stairsMesh06 );
+
+        // Lépcsőfok (7):
+        stairsMesh07 = new THREE.Mesh( new THREE.BoxGeometry(30, 70, 20), stoneMaterial );
+        stairsMesh07.receiveShadow = true;
+        stairsMesh07.castShadow = true;
+        stairsMesh07.position.set(0, 15, -120);
+        stairGroup01.add( stairsMesh07 );
+
+        // Lépcsőfok (8):
+        stairsMesh08 = new THREE.Mesh( new THREE.BoxGeometry(30, 80, 20), stoneMaterial );
+        stairsMesh08.receiveShadow = true;
+        stairsMesh08.castShadow = true;
+        stairsMesh08.position.set(0, 20, -140);
+        stairGroup01.add( stairsMesh08 );
+
+        // Lépcsőfok (9):
+        stairsMesh09 = new THREE.Mesh( new THREE.BoxGeometry(30, 90, 20), stoneMaterial );
+        stairsMesh09.receiveShadow = true;
+        stairsMesh09.castShadow = true;
+        stairsMesh09.position.set(0, 25, -160);
+        stairGroup01.add( stairsMesh09 );
+
+        // Lépcsőfok (10):
+        stairsMesh10 = new THREE.Mesh( new THREE.BoxGeometry(30, 90, 50), stoneMaterial );
+        stairsMesh10.receiveShadow = true;
+        stairsMesh10.castShadow = true;
+        stairsMesh10.position.set(0, 25, -185);
+        stairGroup01.add( stairsMesh10 );
+
+        scene.add( stairGroup01 );
+
+        // Lépcső (2) létrehozása:
+
+        stairGroup02 = new THREE.Object3D();
+        stairGroup02.rotation.y = THREE.MathUtils.degToRad( 90 );
+        stairGroup02.position.set(-105, 0, 5);
+
+        // Lépcsőfok (11):
+        stairsMesh11 = new THREE.Mesh( new THREE.BoxGeometry(30, 10, 20), stoneMaterial );
+        stairsMesh11.receiveShadow = true;
+        stairsMesh11.castShadow = true;
+        stairsMesh11.position.set(0, -15, 0);
+        stairGroup02.add( stairsMesh11 );
+
+        // Lépcsőfok (12):
+        stairsMesh12 = new THREE.Mesh( new THREE.BoxGeometry(30, 20, 20), stoneMaterial );
+        stairsMesh12.receiveShadow = true;
+        stairsMesh12.castShadow = true;
+        stairsMesh12.position.set(0, -10, -20);
+        stairGroup02.add( stairsMesh12 );
+
+        // Lépcsőfok (13):
+        stairsMesh13 = new THREE.Mesh( new THREE.BoxGeometry(30, 30, 20), stoneMaterial );
+        stairsMesh13.receiveShadow = true;
+        stairsMesh13.castShadow = true;
+        stairsMesh13.position.set(0, -5, -40);
+        stairGroup02.add( stairsMesh13 );
+
+        // Lépcsőfok (14):
+        stairsMesh14 = new THREE.Mesh( new THREE.BoxGeometry(30, 40, 20), stoneMaterial );
+        stairsMesh14.receiveShadow = true;
+        stairsMesh14.castShadow = true;
+        stairsMesh14.position.set(0, 0, -60);
+        stairGroup02.add( stairsMesh14 );
+
+        // Lépcsőfok (15):
+        stairsMesh15 = new THREE.Mesh( new THREE.BoxGeometry(30, 50, 20), stoneMaterial );
+        stairsMesh15.receiveShadow = true;
+        stairsMesh15.castShadow = true;
+        stairsMesh15.position.set(0, 5, -80);
+        stairGroup02.add( stairsMesh15 );
+
+        // Lépcsőfok (16):
+        stairsMesh16 = new THREE.Mesh( new THREE.BoxGeometry(30, 60, 20), stoneMaterial );
+        stairsMesh16.receiveShadow = true;
+        stairsMesh16.castShadow = true;
+        stairsMesh16.position.set(0, 10, -100);
+        stairGroup02.add( stairsMesh16 );
+
+        // Lépcsőfok (17):
+        stairsMesh17 = new THREE.Mesh( new THREE.BoxGeometry(30, 70, 20), stoneMaterial );
+        stairsMesh17.receiveShadow = true;
+        stairsMesh17.castShadow = true;
+        stairsMesh17.position.set(0, 15, -120);
+        stairGroup02.add( stairsMesh17 );
+
+        // Lépcsőfok (18):
+        stairsMesh18 = new THREE.Mesh( new THREE.BoxGeometry(30, 80, 20), stoneMaterial );
+        stairsMesh18.receiveShadow = true;
+        stairsMesh18.castShadow = true;
+        stairsMesh18.position.set(0, 20, -140);
+        stairGroup02.add( stairsMesh18 );
+
+        // Lépcsőfok (19):
+        stairsMesh19 = new THREE.Mesh( new THREE.BoxGeometry(30, 90, 20), stoneMaterial );
+        stairsMesh19.receiveShadow = true;
+        stairsMesh19.castShadow = true;
+        stairsMesh19.position.set(0, 25, -160);
+        stairGroup02.add( stairsMesh19 );
+
+        // Lépcsőfok (20):
+        stairsMesh20 = new THREE.Mesh( new THREE.BoxGeometry(30, 90, 80), stoneMaterial );
+        stairsMesh20.receiveShadow = true;
+        stairsMesh20.castShadow = true;
+        stairsMesh20.position.set(0, 25, -210);
+        stairGroup02.add( stairsMesh20 );
+
+        scene.add( stairGroup02 );
+
+        // Szekér létrehozása:
+
+        wainGroup = new THREE.Object3D();
+
+        // Szekér alap:
+        wainMesh01 = new THREE.Mesh( new THREE.BoxGeometry(45, 2.5, 80), woodMaterial );
+        wainMesh01.receiveShadow = true;
+        wainMesh01.castShadow = true;
+        wainMesh01.position.set(0, 0, 0);
+        wainGroup.add( wainMesh01 );
+
+        // Szekér kerítés
+        wainMesh02 = new THREE.Mesh( new THREE.CylinderGeometry(2, 2, 80, 30), woodMaterial );
+        wainMesh02.receiveShadow = true;
+        wainMesh02.castShadow = true;
+        wainMesh02.rotation.x = THREE.MathUtils.degToRad( 90 );
+        wainMesh02.position.set(28, 14, 4);
+        wainGroup.add( wainMesh02 );
+
+        wainMesh03 = new THREE.Mesh( new THREE.CylinderGeometry(2, 2, 80, 30), woodMaterial );
+        wainMesh03.receiveShadow = true;
+        wainMesh03.castShadow = true;
+        wainMesh03.rotation.x = -1 * THREE.MathUtils.degToRad( 90 );
+        wainMesh03.position.set(-28, 14, 4);
+        wainGroup.add( wainMesh03 );
+
+        wainMesh04 = new THREE.Mesh( new THREE.CylinderGeometry(2, 2, 59, 30), woodMaterial );
+        wainMesh04.receiveShadow = true;
+        wainMesh04.castShadow = true;
+        wainMesh04.rotation.set( THREE.MathUtils.degToRad( 90 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wainMesh04.position.set(0, 18, 40);
+        wainGroup.add( wainMesh04 );
+
+        // Szekér kerítés lécek:
+        wainMesh05 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 20, 30), woodMaterial );
+        wainMesh05.receiveShadow = true;
+        wainMesh05.castShadow = true;
+        wainMesh05.rotation.set( 0, 0, THREE.MathUtils.degToRad( 30 ) );
+        wainMesh05.position.set(-26, 9, 35);
+        wainGroup.add( wainMesh05 );
+
+        wainMesh06 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 20, 30), woodMaterial );
+        wainMesh06.receiveShadow = true;
+        wainMesh06.castShadow = true;
+        wainMesh06.rotation.set( 0, 0, THREE.MathUtils.degToRad( 30 ) );
+        wainMesh06.position.set(-26, 9, 5);
+        wainGroup.add( wainMesh06 );
+
+        wainMesh07 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 20, 30), woodMaterial );
+        wainMesh07.receiveShadow = true;
+        wainMesh07.castShadow = true;
+        wainMesh07.rotation.set( 0, 0, THREE.MathUtils.degToRad( 30 ) );
+        wainMesh07.position.set(-26, 9, -25);
+        wainGroup.add( wainMesh07 );
+
+        wainMesh08 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 20, 30), woodMaterial );
+        wainMesh08.receiveShadow = true;
+        wainMesh08.castShadow = true;
+        wainMesh08.rotation.set( 0, 0, -1 * THREE.MathUtils.degToRad( 30 ) );
+        wainMesh08.position.set(26, 9, 35);
+        wainGroup.add( wainMesh08 );
+
+        wainMesh09 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 20, 30), woodMaterial );
+        wainMesh09.receiveShadow = true;
+        wainMesh09.castShadow = true;
+        wainMesh09.rotation.set( 0, 0, -1 * THREE.MathUtils.degToRad( 30 ) );
+        wainMesh09.position.set(26, 9, 5);
+        wainGroup.add( wainMesh09 );
+
+        wainMesh10 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 20, 30), woodMaterial );
+        wainMesh10.receiveShadow = true;
+        wainMesh10.castShadow = true;
+        wainMesh10.rotation.set( 0, 0, -1 * THREE.MathUtils.degToRad( 30 ) );
+        wainMesh10.position.set(26, 9, -25);
+        wainGroup.add( wainMesh10 );
+
+        wainMesh11 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 25, 30), woodMaterial );
+        wainMesh11.receiveShadow = true;
+        wainMesh11.castShadow = true;
+        wainMesh11.rotation.set( -1 * THREE.MathUtils.degToRad( 40 ), 0, THREE.MathUtils.degToRad( 10 ) );
+        wainMesh11.position.set(-18, 9, -40);
+        wainGroup.add( wainMesh11 );
+
+        wainMesh12 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 25, 30), woodMaterial );
+        wainMesh12.receiveShadow = true;
+        wainMesh12.castShadow = true;
+        wainMesh12.rotation.set( -1 * THREE.MathUtils.degToRad( 40 ), 0, -1 * THREE.MathUtils.degToRad( 10 ) );
+        wainMesh12.position.set(18, 9, -40);
+        wainGroup.add( wainMesh12 );
+
+        wainMesh13 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 40, 30), woodMaterial );
+        wainMesh13.receiveShadow = true;
+        wainMesh13.castShadow = true;
+        wainMesh13.rotation.set( THREE.MathUtils.degToRad( 90 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wainMesh13.position.set(0, 10, -40);
+        wainGroup.add( wainMesh13 );
+
+
+        // Kerekek:
+        wainMesh14 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 80, 30), woodMaterial );
+        wainMesh14.receiveShadow = true;
+        wainMesh14.castShadow = true;
+        wainMesh14.rotation.set( THREE.MathUtils.degToRad( 90 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wainMesh14.position.set(0, -5, 30);
+        wainGroup.add( wainMesh14 );
+
+        wainMesh15 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 80, 30), woodMaterial );
+        wainMesh15.receiveShadow = true;
+        wainMesh15.castShadow = true;
+        wainMesh15.rotation.set( THREE.MathUtils.degToRad( 90 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wainMesh15.position.set(0, -5, -30);
+        wainGroup.add( wainMesh15 );
+
+        wheelGroup = new THREE.Object3D();
+
+        wheelMesh01 = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 3, 30, 1), woodMaterial );
+        wheelMesh01.receiveShadow = true;
+        wheelMesh01.castShadow = true;
+        wheelMesh01.rotation.set( THREE.MathUtils.degToRad( 90 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wheelMesh01.position.set(-32, -5, 30);
+        wheelGroup.add( wheelMesh01 );
+
+        wheelMesh02 = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 3, 30, 1), woodMaterial );
+        wheelMesh02.receiveShadow = true;
+        wheelMesh02.castShadow = true;
+        wheelMesh02.rotation.set( THREE.MathUtils.degToRad( 90 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wheelMesh02.position.set(32, -5, 30);
+        wheelGroup.add( wheelMesh02 );
+
+        wheelMesh03 = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 3, 30, 1), woodMaterial );
+        wheelMesh03.receiveShadow = true;
+        wheelMesh03.castShadow = true;
+        wheelMesh03.rotation.set( THREE.MathUtils.degToRad( 90 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wheelMesh03.position.set(-32, -5, -30);
+        wheelGroup.add( wheelMesh03 );
+
+        wheelMesh04 = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 3, 30, 1), woodMaterial );
+        wheelMesh04.receiveShadow = true;
+        wheelMesh04.castShadow = true;
+        wheelMesh04.rotation.set( THREE.MathUtils.degToRad( 90 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wheelMesh04.position.set(32, -5, -30);
+        wheelGroup.add( wheelMesh04 );
+
+        wainGroup.add( wheelGroup );
+
+        wainMesh16 = new THREE.Mesh( new THREE.CylinderGeometry(3, 3, 6, 30), woodMaterial );
+        wainMesh16.receiveShadow = true;
+        wainMesh16.castShadow = true;
+        wainMesh16.position.set(0, -2, 30);
+        wainGroup.add( wainMesh16 );
+
+        wainMesh17 = new THREE.Mesh( new THREE.CylinderGeometry(3, 3, 6, 30), woodMaterial );
+        wainMesh17.receiveShadow = true;
+        wainMesh17.castShadow = true;
+        wainMesh17.position.set(0, -2, -30);
+        wainGroup.add( wainMesh17 )
+
+        wainGroup.add( wheelGroup );
+
+        wainMesh16 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 30, 30), woodMaterial );
+        wainMesh16.receiveShadow = true;
+        wainMesh16.castShadow = true;
+        wainMesh16.rotation.set( THREE.MathUtils.degToRad( 85 ), 0, THREE.MathUtils.degToRad( 40 ) );
+        wainMesh16.position.set(-10, -2, -50);
+        wainGroup.add( wainMesh16 );
+
+        wainMesh17 = new THREE.Mesh( new THREE.CylinderGeometry(1.5, 1.5, 30, 30), woodMaterial );
+        wainMesh17.receiveShadow = true;
+        wainMesh17.castShadow = true;
+        wainMesh17.rotation.set( THREE.MathUtils.degToRad( 85 ), 0, -1 * THREE.MathUtils.degToRad( 40 ) );
+        wainMesh17.position.set(10, -2, -50);
+        wainGroup.add( wainMesh17 );
+
+        wainMesh18 = new THREE.Mesh( new THREE.CylinderGeometry(2, 2, 70, 30), woodMaterial );
+        wainMesh18.receiveShadow = true;
+        wainMesh18.castShadow = true;
+        wainMesh18.rotation.set( THREE.MathUtils.degToRad( 85 ), 0, 0 );
+        wainMesh18.position.set(0, -6, -93);
+        wainGroup.add( wainMesh18 );
+
+        wainMesh19 = new THREE.Mesh( new THREE.CylinderGeometry(2, 2, 60, 30), woodMaterial );
+        wainMesh19.receiveShadow = true;
+        wainMesh19.castShadow = true;
+        wainMesh19.rotation.set( THREE.MathUtils.degToRad( 85 ), 0, THREE.MathUtils.degToRad( 90 ) );
+        wainMesh19.position.set(0, 0, -60);
+        wainGroup.add( wainMesh19 );
+
+        wainGroup.rotation.y = THREE.MathUtils.degToRad( 75 );
+        wainGroup.position.set(140, -7, 90);
+        wainGroup.scale.set(0.65, 0.65, 0.65);
+        scene.add( wainGroup );
+
+        // Akasztófa hozzáadása:
+
+        gallowsGroup = new THREE.Object3D();
+        gallowsGroup.position.set(80, 0, -230);
+
+        // Alap:
+        gallowsMesh01 = new THREE.Mesh( new THREE.BoxGeometry(90, 3, 50), woodMaterial );
+        gallowsMesh01.receiveShadow = true;
+        gallowsMesh01.castShadow = true;
+        gallowsMesh01.position.set(0, 0, 0);
+        gallowsGroup.add( gallowsMesh01 );
+
+        // Lábak:
+        gallowsMesh02 = new THREE.Mesh( new THREE.BoxGeometry(4, 20, 4), woodMaterial );
+        gallowsMesh02.receiveShadow = true;
+        gallowsMesh02.castShadow = true;
+        gallowsMesh02.position.set(-42, -10, 22);
+        gallowsGroup.add( gallowsMesh02 );
+
+        gallowsMesh03 = new THREE.Mesh( new THREE.BoxGeometry(4, 20, 4), woodMaterial );
+        gallowsMesh03.receiveShadow = true;
+        gallowsMesh03.castShadow = true;
+        gallowsMesh03.position.set(-42, -10, -22);
+        gallowsGroup.add( gallowsMesh03 );
+
+        gallowsMesh04 = new THREE.Mesh( new THREE.BoxGeometry(4, 20, 4), woodMaterial );
+        gallowsMesh04.receiveShadow = true;
+        gallowsMesh04.castShadow = true;
+        gallowsMesh04.position.set(42, -10, 22);
+        gallowsGroup.add( gallowsMesh04 );
+
+        gallowsMesh05 = new THREE.Mesh( new THREE.BoxGeometry(4, 20, 4), woodMaterial );
+        gallowsMesh05.receiveShadow = true;
+        gallowsMesh05.castShadow = true;
+        gallowsMesh05.position.set(42, -10, -22);
+        gallowsGroup.add( gallowsMesh05 );
+
+        gallowsMesh08 = new THREE.Mesh( new THREE.BoxGeometry(3, 28, 3), woodMaterial );
+        gallowsMesh08.receiveShadow = true;
+        gallowsMesh08.castShadow = true;
+        gallowsMesh08.rotation.set(0, 0, THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh08.position.set(31, -9, 22);
+        gallowsGroup.add( gallowsMesh08 );
+
+        gallowsMesh09 = new THREE.Mesh( new THREE.BoxGeometry(3, 28, 3), woodMaterial );
+        gallowsMesh09.receiveShadow = true;
+        gallowsMesh09.castShadow = true;
+        gallowsMesh09.rotation.set(0, 0, THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh09.position.set(31, -9, -22);
+        gallowsGroup.add( gallowsMesh09 );
+
+        gallowsMesh10 = new THREE.Mesh( new THREE.BoxGeometry(3, 28, 3), woodMaterial );
+        gallowsMesh10.receiveShadow = true;
+        gallowsMesh10.castShadow = true;
+        gallowsMesh10.rotation.set(0, 0, -1 * THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh10.position.set(-31, -9, 22);
+        gallowsGroup.add( gallowsMesh10 );
+
+        gallowsMesh11 = new THREE.Mesh( new THREE.BoxGeometry(3, 28, 3), woodMaterial );
+        gallowsMesh11.receiveShadow = true;
+        gallowsMesh11.castShadow = true;
+        gallowsMesh11.rotation.set(0, 0, -1 * THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh11.position.set(-31, -9, -22);
+        gallowsGroup.add( gallowsMesh11 );
+
+        gallowsMesh12 = new THREE.Mesh( new THREE.BoxGeometry(3, 80, 3), woodMaterial );
+        gallowsMesh12.receiveShadow = true;
+        gallowsMesh12.castShadow = true;
+        gallowsMesh12.rotation.set(0, 0, -1 * THREE.MathUtils.degToRad( 90 ));
+        gallowsMesh12.position.set(0, -17, 22);
+        gallowsGroup.add( gallowsMesh12 );
+
+        gallowsMesh13 = new THREE.Mesh( new THREE.BoxGeometry(3, 80, 3), woodMaterial );
+        gallowsMesh13.receiveShadow = true;
+        gallowsMesh13.castShadow = true;
+        gallowsMesh13.rotation.set(0, 0, THREE.MathUtils.degToRad( 90 ));
+        gallowsMesh13.position.set(0, -17, -22);
+        gallowsGroup.add( gallowsMesh13 );
+
+        gallowsMesh14 = new THREE.Mesh( new THREE.BoxGeometry(3, 40, 3), woodMaterial );
+        gallowsMesh14.receiveShadow = true;
+        gallowsMesh14.castShadow = true;
+        gallowsMesh14.rotation.set(0, THREE.MathUtils.degToRad( 90 ), THREE.MathUtils.degToRad( 90 ));
+        gallowsMesh14.position.set(42, -17, 0);
+        gallowsGroup.add( gallowsMesh14 );
+
+        gallowsMesh15 = new THREE.Mesh( new THREE.BoxGeometry(3, 40, 3), woodMaterial );
+        gallowsMesh15.receiveShadow = true;
+        gallowsMesh15.castShadow = true;
+        gallowsMesh15.rotation.set(0, THREE.MathUtils.degToRad( 90 ), THREE.MathUtils.degToRad( 90 ));
+        gallowsMesh15.position.set(-42, -17, 0);
+        gallowsGroup.add( gallowsMesh15 );
+
+        // Akasztófa:
+        gallowsMesh16 = new THREE.Mesh( new THREE.BoxGeometry(5, 70, 5), woodMaterial );
+        gallowsMesh16.receiveShadow = true;
+        gallowsMesh16.castShadow = true;
+        gallowsMesh16.position.set(0, 35, -10);
+        gallowsGroup.add( gallowsMesh16 );
+
+        gallowsMesh17 = new THREE.Mesh( new THREE.BoxGeometry(4, 45, 5), woodMaterial );
+        gallowsMesh17.receiveShadow = true;
+        gallowsMesh17.castShadow = true;
+        gallowsMesh17.rotation.set(THREE.MathUtils.degToRad( 90 ), THREE.MathUtils.degToRad( 90 ), 0);
+        gallowsMesh17.position.set(0, 72, -3);
+        gallowsGroup.add( gallowsMesh17 );
+
+        gallowsMesh18 = new THREE.Mesh( new THREE.BoxGeometry(3, 15, 3), woodMaterial );
+        gallowsMesh18.receiveShadow = true;
+        gallowsMesh18.castShadow = true;
+        gallowsMesh18.rotation.set(0, 0, -1 * THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh18.position.set(-7, 5, -10);
+        gallowsGroup.add( gallowsMesh18 );
+
+        gallowsMesh19 = new THREE.Mesh( new THREE.BoxGeometry(3, 15, 3), woodMaterial );
+        gallowsMesh19.receiveShadow = true;
+        gallowsMesh19.castShadow = true;
+        gallowsMesh19.rotation.set(0, 0, THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh19.position.set(7, 5, -10);
+        gallowsGroup.add( gallowsMesh19 );
+
+        gallowsMesh20 = new THREE.Mesh( new THREE.BoxGeometry(3, 15, 3), woodMaterial );
+        gallowsMesh20.receiveShadow = true;
+        gallowsMesh20.castShadow = true;
+        gallowsMesh20.rotation.set(0, THREE.MathUtils.degToRad( 90 ), THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh20.position.set(0, 5, -17);
+        gallowsGroup.add( gallowsMesh20 );
+
+        gallowsMesh21 = new THREE.Mesh( new THREE.BoxGeometry(3, 15, 3), woodMaterial );
+        gallowsMesh21.receiveShadow = true;
+        gallowsMesh21.castShadow = true;
+        gallowsMesh21.rotation.set(0, -1 * THREE.MathUtils.degToRad( 90 ), THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh21.position.set(0, 5, -3);
+        gallowsGroup.add( gallowsMesh21 );
+
+        gallowsMesh22 = new THREE.Mesh( new THREE.BoxGeometry(3, 15, 3), woodMaterial );
+        gallowsMesh22.receiveShadow = true;
+        gallowsMesh22.castShadow = true;
+        gallowsMesh22.rotation.set(0, -1 * THREE.MathUtils.degToRad( 90 ), THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh22.position.set(0, 68, -17);
+        gallowsGroup.add( gallowsMesh22 );
+
+        gallowsMesh23 = new THREE.Mesh( new THREE.BoxGeometry(3, 15, 3), woodMaterial );
+        gallowsMesh23.receiveShadow = true;
+        gallowsMesh23.castShadow = true;
+        gallowsMesh23.rotation.set(0, THREE.MathUtils.degToRad( 90 ), THREE.MathUtils.degToRad( 50 ));
+        gallowsMesh23.position.set(0, 68, -3);
+        gallowsGroup.add( gallowsMesh23 );
+
+        // Akasztófa lépcsők:
+        gallowsMesh24 = new THREE.Mesh( new THREE.BoxGeometry(15, 21.5, 10), woodMaterial );
+        gallowsMesh24.receiveShadow = true;
+        gallowsMesh24.castShadow = true;
+        gallowsMesh24.position.set(20, -9.25, 30);
+        gallowsGroup.add( gallowsMesh24 );
+
+        gallowsMesh25 = new THREE.Mesh( new THREE.BoxGeometry(15, 11.5, 10), woodMaterial );
+        gallowsMesh25.receiveShadow = true;
+        gallowsMesh25.castShadow = true;
+        gallowsMesh25.position.set(20, -14.25, 40);
+        gallowsGroup.add( gallowsMesh25 );
+
+        scene.add( gallowsGroup );
+
+        // Fények hozzáadása
+        ambient = new THREE.AmbientLight( 0x888888, 0 );
+        scene.add( ambient );
+
+        spot01 = new THREE.SpotLight( 0xffff55, 0, 1800, 10 , 0.5 );
+        spot01.position.set( 500, 350, 250);
+        spot01.target = gatehouseMesh01;
+        spot01.castShadow = true;
+        scene.add( spot01 );
+
+        // var spotlightHelper = new THREE.SpotLightHelper( spot01, 0xffffff );
+        // scene.add( spotlightHelper );
+
+        point01 = new THREE.PointLight( 0x808000, 0.75 );
+        point01.position.set( 255, 30, 80 );
+        scene.add( point01 );
+
+        pointHelper01 = new THREE.PointLightHelper( point01, 5, 0xffffff );
+        scene.add( pointHelper01 );
+
+        point02 = new THREE.PointLight( 0x808000, 0.75 );
+        point02.position.set( 65, 30, 188 );
+        scene.add( point02 );
+
+        pointHelper02 = new THREE.PointLightHelper( point02, 5, 0xffffff );
+        scene.add( pointHelper02 );
+
+        point03 = new THREE.PointLight( 0x808000, 0.75 );
+        point03.position.set( -350, 30, 30 );
+        scene.add( point03 );
+
+        pointHelper03 = new THREE.PointLightHelper( point03, 5, 0xffffff );
+        scene.add( pointHelper03 );
+
+        // Az ablak későbbi átméretezése esetén visszahívható függvény megadása
+        window.addEventListener( 'resize', handleWindowResize, false );
+
+        // Első képkocka rajzolása
+        render();
+    }
+
+    function handleWindowResize() {
+        // Az ablak átméretezése esetén a kamera vetítési paraméterek újraszámolása
+        HEIGHT = window.innerHeight;
+        WIDTH = window.innerWidth;
+        console.log( 'WIDTH=' + WIDTH + '; HEIGHT=' + HEIGHT );
+        renderer.setSize( WIDTH, HEIGHT );
+        aspectRatio = WIDTH / HEIGHT;
+        camera.aspect = aspectRatio;
+        camera.updateProjectionMatrix();
+
+        render();
+    }
+
+    function animate() {
+        witchGroup01.rotation.y += 0.06;
+        witchGroup02.rotation.y -= 0.08;
+        witchGroup03.rotation.y -= 0.1;
+
+        donkeyLoadedGroup.rotation.y = ctrl.rotationDonkey * Math.PI / 180.0;;
+        donkeyLoaded.position.x = ctrl.positionDonkeyX;
+        donkeyLoaded.position.z = ctrl.positionDonkeyZ;
+        gatehouseMesh04.rotation.x = ctrl.rotationBarrel * Math.PI / 180.0;
+        if( ctrl.lights == true ) {
+            witchGroup01.visible = false;
+            witchGroup02.visible = false;
+            witchGroup03.visible = false;
+            spot01.intensity = 1;
+            ambient.intensity = 0.8;
+        }
+        if( ctrl.lights == false ) {
+            witchGroup01.visible = true;
+            witchGroup02.visible = true;
+            witchGroup03.visible = true;
+            spot01.intensity = 0;
+            ambient.intensity = 0;
+        }
+
+        requestAnimationFrame( animate );
+        controls.update();
+        render();
+    }
+
+    function render() {
+        renderer.render(scene, camera);
+    }
+
+
+</script>
+</body>
+</html>
